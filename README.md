@@ -16,32 +16,33 @@ Anything already in place is skipped, so it is safe to run again. **Dry run** sh
 
 Double-click `VectorContourSetup.exe`, say Yes to the admin prompt, and the window opens. You can drop a preset `.json` onto the exe to load it, or run it from a command line with `VectorContourSetup.exe my-pc.json -Run` to apply the preset without the window.
 
-The exe is a small launcher with `winsetup.ps1` built in. It writes the script to `%TEMP%\VectorContourSetup` and starts it in PowerShell as administrator. To rebuild it after changing the script:
+The exe is a small launcher with `winsetup.ps1` built in. It writes the script to `%TEMP%\VectorContourSetup` and starts it in PowerShell as administrator.
 
 - On Windows: `powershell -ExecutionPolicy Bypass -File .\launcher\build.ps1`
 - On a Mac: `brew install mono`, then `sh launcher/build.sh`
 
 The exe isn't code-signed, so Windows SmartScreen will say "Windows protected your PC" (click **More info**, then **Run anyway**). Some antivirus tools also distrust unsigned launchers that run PowerShell. Before you hand it to customers, sign it with a code-signing certificate.
 
+The exe is built automatically by GitHub (see *Releases and the .exe* below), or by hand:
+
 ### From the web
 
-Open PowerShell **as administrator** and run:
+On a new PC, open PowerShell **as administrator** (Start, type PowerShell, right-click, Run as administrator) and run:
 
 ```powershell
-irm https://vectorcontour.com/win | iex
+irm https://raw.githubusercontent.com/Vector-Contour/Windows-Setup/main/winsetup.ps1 | iex
 ```
 
-If PowerShell isn't elevated, the script reopens itself in an admin window.
+If PowerShell isn't elevated, the script reopens itself in an admin window. It always runs the current version on `main`, so a merged change is live within about five minutes (GitHub caches raw files briefly).
 
 Running a preset with no window:
 
 ```powershell
-& ([scriptblock]::Create((irm https://vectorcontour.com/win))) -Preset C:\path\my-pc.json -Run
-# preview only:
-& ([scriptblock]::Create((irm https://vectorcontour.com/win))) -Preset C:\path\my-pc.json -Run -DryRun
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Vector-Contour/Windows-Setup/main/winsetup.ps1))) -Preset https://raw.githubusercontent.com/Vector-Contour/Windows-Setup/main/presets/example.json -Run
+# preview only: add -DryRun
 ```
 
-`-Preset` also takes a URL, so you can host presets on the website too.
+`-Preset` takes a URL or a local path, so a company preset can live in `presets/` here and be run straight from GitHub.
 
 Running from a local copy:
 
@@ -50,16 +51,21 @@ powershell -ExecutionPolicy Bypass -File .\winsetup.ps1
 powershell -ExecutionPolicy Bypass -File .\winsetup.ps1 -Preset .\presets\example.json -Run -DryRun
 ```
 
-## Hosting on vectorcontour.com
+### A short link on vectorcontour.com (later)
 
-`irm` just downloads the script text, so `https://vectorcontour.com/win` has to return the raw contents of `winsetup.ps1`. There are two ways to do that:
+To use `irm vectorcontour.com/win | iex` instead, make `https://vectorcontour.com/win` an HTTPS **302 redirect** to
+`https://raw.githubusercontent.com/Vector-Contour/Windows-Setup/main/winsetup.ps1`.
+On AWS that is an S3 bucket redirect rule or a CloudFront function; most hosting panels call it a "URL redirect". The website never needs to change again: updates still come from GitHub. Once it works, change `$SourceUrl` at the top of `winsetup.ps1` to the short link (the script uses it to relaunch itself as admin).
 
-1. **Recommended: redirect to a GitHub release.** Keep this folder in a GitHub repo, attach `winsetup.ps1` to each release, and make `/win` a 302 redirect to
-   `https://github.com/<owner>/<repo>/releases/latest/download/winsetup.ps1`.
-   You ship an update by publishing a release, and the website never changes. (Chris Titus's `christitus.com/win` works this way.)
-2. **Serve the file directly.** Upload `winsetup.ps1` and make `/win` return it with `Content-Type: text/plain; charset=utf-8`. Save it **without a BOM**.
+## Releases and the .exe
 
-Both need HTTPS, because people pipe the response straight into PowerShell. Keep the `$SourceUrl` line at the top of the script pointing at the same URL. The script uses it to relaunch itself as admin.
+GitHub Actions checks every change: it parses every script in Windows PowerShell 5.1, checks the presets are valid JSON, and builds `VectorContourSetup.exe`. The exe from any run can be downloaded from that run's page under **Artifacts**.
+
+To publish a version, create a tag such as `v0.2.0` (GitHub: **Releases > Draft a new release**, type the new tag, publish). The build attaches `winsetup.ps1` and `VectorContourSetup.exe` to that release. Built files are never committed to the repo.
+
+## Your own installers and files
+
+Installers and files that aren't on winget or a vendor link go in this repo's **files** release and are referred to as `files:<name>`. The repo is public, so sensitive files stay out of it and are copied by hand for now. See [docs/hosting-files.md](docs/hosting-files.md) for how to add or replace a file and how to decide what is public.
 
 ## Editing the lists
 
@@ -77,6 +83,7 @@ An app can be downloaded straight from the vendor instead. There are three ways 
 | Field | Use when |
 |---|---|
 | `url` | The vendor has a permanent link, e.g. `https://vendor.com/download/latest/setup.exe` |
+| `url` = `files:<name>` | You host the installer yourself in this repo's files release (see [docs/hosting-files.md](docs/hosting-files.md)) |
 | `github` + `asset` | The app is released on GitHub: `"github": "owner/repo"`, plus a regex for the file name (default: any `.exe`/`.msi`) |
 | `page` + `link` | The vendor only has a download page: the script loads the page and takes the first link matching the `link` regex (group 1 if it has one) |
 
@@ -127,7 +134,7 @@ See `presets/example.json`. Every section is optional.
 | `folderTemplates` | Template keys (`developer`, `business`, `creative`, `support`, `gaming`, `tidy`) or template objects |
 | `folders` | Folders to create (`%VARS%` allowed) |
 | `quickAccess` | Folders to pin to Quick Access |
-| `files` | `{source, destination}` (the source can be a URL or a path relative to the preset) or `{destination, content}` for a text file |
+| `files` | `{source, destination}` (the source can be a URL, `files:<name>`, or a path relative to the preset) or `{destination, content}` for a text file |
 | `tweaks` | `TweakName: true` to apply, `false` to undo |
 | `registry` | Raw values: `{path, name, type, value}` |
 | `features.enable` / `features.disable` | Optional feature names |

@@ -8,10 +8,10 @@
     Selections can be saved as a JSON preset and replayed without the window.
 
     Run from the web (PowerShell as admin):
-        irm https://vectorcontour.com/win | iex
+        irm https://raw.githubusercontent.com/Vector-Contour/Windows-Setup/main/winsetup.ps1 | iex
 
     Run a preset without the window:
-        & ([scriptblock]::Create((irm https://vectorcontour.com/win))) -Preset .\my-pc.json -Run
+        & ([scriptblock]::Create((irm https://raw.githubusercontent.com/Vector-Contour/Windows-Setup/main/winsetup.ps1))) -Preset .\my-pc.json -Run
 
     Run locally:
         .\winsetup.ps1                      # open the window
@@ -26,7 +26,7 @@ param(
 
 $AppName = 'VectorContour Windows Setup'
 $AppVersion = '0.1.0'
-$SourceUrl = 'https://vectorcontour.com/win'
+$SourceUrl = 'https://raw.githubusercontent.com/Vector-Contour/Windows-Setup/main/winsetup.ps1'
 
 $ErrorActionPreference = 'Stop'
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
@@ -70,6 +70,15 @@ $Engine = {
 
     # Make cmdlet errors throw, so Invoke-Step reports them as failures.
     $ErrorActionPreference = 'Stop'
+
+    # ---- Where files come from ----
+    # files:<name>    an asset of the "files" release in this repo (public: anyone can download it)
+    # private:<name>  a file from $PrivateFilesUrl. Not set up yet, so private files are copied
+    #                 by hand; the run lists them as [by hand] steps. Later this can point at a
+    #                 login-protected download (e.g. the wiki) and add its sign-in here.
+    $PublicRepo = 'Vector-Contour/Windows-Setup'
+    $FilesTag = 'files'
+    $PrivateFilesUrl = ''
 
     # ---- Catalogs ----
 
@@ -481,8 +490,34 @@ $Engine = {
         [bool](Get-ItemProperty -Path $keys -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like $Pattern })
     }
 
+    # True for sources the script resolves itself: files:<name> and private:<name>.
+    function Test-ReleaseSource([string]$Source) { $Source -match '^(files|private):.+' }
+
+    # Private files aren't downloadable yet: note them as a by-hand step instead of failing.
+    function Test-PrivatePending([string]$Source, [string]$What) {
+        if ($Source -notmatch '^private:(.+)$' -or $PrivateFilesUrl) { return $false }
+        Write-Log "  [by hand] $What : copy $($Matches[1]) onto this PC yourself" 'Yellow'
+        $script:Stats.Skipped++
+        $true
+    }
+
+    # Downloads a files:/private: release asset, or any http(s) link, to $Path.
+    function Save-RemoteFile([string]$Source, [string]$Path) {
+        if ($Source -match '^files:(.+)$') {
+            $url = "https://github.com/$PublicRepo/releases/download/$FilesTag/$([Uri]::EscapeDataString($Matches[1]))"
+            Invoke-WebRequest -Uri $url -OutFile $Path -UseBasicParsing
+            return
+        }
+        if ($Source -match '^private:(.+)$') {
+            Invoke-WebRequest -Uri "$($PrivateFilesUrl.TrimEnd('/'))/$([Uri]::EscapeDataString($Matches[1]))" -OutFile $Path -UseBasicParsing
+            return
+        }
+        Invoke-WebRequest -Uri $Source -OutFile $Path -UseBasicParsing
+    }
+
     # Works out the download link for a direct app, so it always gets the latest version:
-    #   url    - a fixed link (many vendors have a permanent "latest" link)
+    #   url    - a fixed link (many vendors have a permanent "latest" link),
+    #            or files:<name> / private:<name> (see "Where files come from" above)
     #   github - "owner/repo": newest release, first asset whose name matches the "asset" regex
     #   page   - a download page: first match of the "link" regex (group 1 if present)
     function Resolve-DownloadUrl($App) {
@@ -517,6 +552,7 @@ $Engine = {
         $target = if ($App.target) { Expand-PathVars $App.target } else { "C:\Tools\$name" }
 
         if ($App.detect -and (Test-AppInstalled $App.detect)) { Write-Skip "$name (already installed)"; return }
+        if (Test-PrivatePending $App.url "Install $name") { return }
         if ($type -in 'zip', 'portable' -and -not $App.detect -and (Test-Path $target)) { Write-Skip "$name (already in $target)"; return }
         if ($type -ne 'msi' -and $type -notin 'zip', 'portable' -and -not $App.args) {
             Write-Log "    $name has no silent switches, so its installer window may open." 'Yellow'
@@ -525,7 +561,7 @@ $Engine = {
         Write-Log "  Downloading $name ..."
         Invoke-Step "Install $name (direct download)" {
             $url = Resolve-DownloadUrl $App
-            $file = [IO.Path]::GetFileName(([Uri]$url).AbsolutePath)
+            $file = if (Test-ReleaseSource $url) { $url -replace '^\w+:' } else { [IO.Path]::GetFileName(([Uri]$url).AbsolutePath) }
             if (-not $type) {
                 $type = switch -Regex ($file) { '\.msi$' { 'msi' } '\.zip$' { 'zip' } default { 'exe' } }
             }
@@ -533,7 +569,7 @@ $Engine = {
             $dir = Join-Path $env:TEMP 'winsetup-downloads'
             New-Item -ItemType Directory -Path $dir -Force | Out-Null
             $path = Join-Path $dir $file
-            Invoke-WebRequest -Uri $url -OutFile $path -UseBasicParsing
+            Save-RemoteFile $url $path
             if ($App.sha256 -and (Get-FileHash $path -Algorithm SHA256).Hash -ne $App.sha256) { throw 'checksum does not match' }
 
             $proc = $null
@@ -620,7 +656,7 @@ $Engine = {
         }
     }
 
-    # Source can be a URL, an absolute path, or a path relative to the preset file.
+    # Source can be a URL, files:<name> / private:<name>, an absolute path, or a path relative to the preset file.
     function Copy-ConfigFiles($Files, [string]$BaseDir) {
         $Files = @($Files | Where-Object { $_ })
         if (-not $Files) { return }
@@ -641,10 +677,12 @@ $Engine = {
                 continue
             }
             $src = Expand-PathVars $f.source
-            if ($src -match '^https?://') {
+            if ($src -match '^https?://' -or (Test-ReleaseSource $src)) {
+                if ((Test-Path $dst) -and -not $f.overwrite -and (Test-ReleaseSource $src)) { Write-Skip "$dst (exists, kept)"; continue }
+                if (Test-PrivatePending $src $dst) { continue }
                 Invoke-Step "Download $src -> $dst" {
                     New-Item -ItemType Directory -Path (Split-Path -Parent $dst) -Force | Out-Null
-                    Invoke-WebRequest -Uri $src -OutFile $dst -UseBasicParsing
+                    Save-RemoteFile $src $dst
                 }
                 continue
             }

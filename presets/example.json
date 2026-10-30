@@ -21,6 +21,17 @@
         "detect": "Example MSI*"
       },
       {
+        "name": "Example installer from the public files release",
+        "url": "files:ExampleSetup.exe",
+        "args": "/S",
+        "detect": "Example Setup*"
+      },
+      {
+        "name": "Example installer from the private files release (needs the setup key)",
+        "url": "private:ExamplePrivateSetup.msi",
+        "detect": "Example Private*"
+      },
+      {
         "name": "Example from GitHub",
         "github": "owner/repo",
         "asset": "-x64-setup\\.exe$",
@@ -55,6 +66,10 @@
     "C:\\Tools"
   ],
   "files": [
+    {
+      "source": "files:example-settings.json",
+      "destination": "%APPDATA%\\ExampleApp\\settings.json"
+    },
     {
       "source": "https://example.com/my-settings.json",
       "destination": "%APPDATA%\\SomeApp\\settings.json"
