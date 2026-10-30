@@ -1,0 +1,8 @@
+# Built launcher (published as a release asset instead)
+dist/
+*.exe
+*.zip
+# Capture snapshots can contain personal data
+snapshot-*/
+# Installers and licensed files go in the "files" release, never in git
+files/

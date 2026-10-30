@@ -1,0 +1,6 @@
+# PowerShell and C# files keep Windows line endings on checkout.
+*.ps1  text eol=crlf
+*.psm1 text eol=crlf
+*.cs   text eol=crlf
+*.json text eol=crlf
+*.sh   text eol=lf
