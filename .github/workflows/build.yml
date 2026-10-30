@@ -1,0 +1,69 @@
+# Checks the scripts, builds VectorContourSetup.exe, and publishes releases.
+#   Every push / pull request: parse every .ps1 in Windows PowerShell 5.1 and build the exe.
+#   Push to main:  make sure the "files" release exists (for installers that aren't on winget).
+#   Release published with a v* tag: attach winsetup.ps1 and VectorContourSetup.exe to it.
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check script syntax
+        shell: powershell
+        run: |
+          $failed = $false
+          foreach ($f in Get-ChildItem -Recurse -Filter *.ps1) {
+              $errors = $null
+              [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors)
+              foreach ($e in $errors) {
+                  Write-Host "::error file=$($f.FullName),line=$($e.Extent.StartLineNumber)::$($e.Message)"
+                  $failed = $true
+              }
+          }
+          if ($failed) { exit 1 }
+          Write-Host 'All scripts parse.'
+
+      - name: Check preset JSON
+        shell: powershell
+        run: Get-ChildItem presets -Filter *.json | ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json | Out-Null; "ok  $($_.Name)" }
+
+      - name: Build VectorContourSetup.exe
+        shell: powershell
+        run: powershell -ExecutionPolicy Bypass -File .\launcher\build.ps1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VectorContourSetup
+          path: |
+            dist/VectorContourSetup.exe
+            winsetup.ps1
+
+      - name: Make sure the "files" release exists
+        if: github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view files >/dev/null 2>&1 || gh release create files --prerelease --title "Installers and files" \
+            --notes "Installers and files the setup script downloads with files:<name>. Upload or replace assets here. See docs/hosting-files.md. Anything on this page is public."
+
+      - name: Attach files to the release
+        if: github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" dist/VectorContourSetup.exe winsetup.ps1 --clobber
