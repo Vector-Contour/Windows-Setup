@@ -10,6 +10,15 @@ A WinUtil-style tool for setting up a fresh Windows 10/11 install from one windo
 
 Anything already in place is skipped, so it is safe to run again. **Dry run** shows what would change without changing anything. Each run is logged in the window (and to `%TEMP%\winsetup-*.log` in unattended mode).
 
+## Review & go
+
+The window opens on **Review & go**: one page listing everything that will happen, all ticked. It starts with the recommended settings and suggested folders. Load a preset (or drop one on the exe) and it shows that preset instead.
+
+- If it all looks right, click **Looks good, go**. **Preview first** shows what would change, without changing anything.
+- Untick a row to skip it, or untick a section's header to skip the whole section.
+- Open a section to edit folder paths, shortcut targets, the installer location or the wallpaper, or to add folders and Quick Access pins.
+- **Use what I picked on the other tabs** rebuilds the page from the Install, Tweaks, Features and Folders tabs, for when you'd rather build a setup from scratch.
+
 ## Running it
 
 ### As an .exe
@@ -72,7 +81,7 @@ Installers and files that aren't on winget or a vendor link go in this repo's **
 All the lists are near the top of `winsetup.ps1`, inside `$Engine`:
 
 - `$AppCatalog`: apps by category. The `Id` is the winget ID. Find one with `winget search <name>`.
-- `$TweakCatalog`: each tweak has the registry values to apply (`On`) and to undo (`Off`).
+- `$TweakCatalog`: each tweak has the registry values to apply (`On`) and to undo (`Off`). Tweaks that aren't plain registry values (power, wallpaper) use `Apply` / `Undo` script blocks instead, or as well.
 - `$BuiltInAppCatalog`: built-in Store apps that can be removed.
 - `$FeatureCatalog`: optional Windows features.
 
@@ -94,6 +103,23 @@ Other fields:
 - `detect`: the app's name as it appears in Settings > Apps (wildcards allowed), so it is skipped if already installed.
 - `target`: the folder for zip and portable apps (default `C:\Tools\<name>`).
 - `sha256`: an optional checksum, useful with fixed-version links.
+
+### Installing from a USB stick or share
+
+For software you can't download automatically (licensed machine software, old versions), point `path` at a local installer instead of a link:
+
+```json
+"installerRoot": "*:\\TECHNICAL DATA\\SOFTWARE",
+"apps": { "install": [
+  { "name": "SoMove", "path": "SOMOVE", "detect": "SoMove*" },
+  { "name": "QCAD/CAM", "path": "QCAD\\qcadcam-*.msi", "detect": "QCAD/CAM*" }
+] }
+```
+
+- `path` can be a file (wildcards allowed, the newest match wins) or a folder. For a folder, the tool picks an `.msi` over an `.exe`, and a name containing *setup* or *install* over others, and logs which one it used.
+- Relative paths are looked up in `installerRoot`, or next to the preset file if there's no root.
+- `*:\` at the start means "any drive", so a USB stick is found whatever letter it gets.
+- Without `args`, the installer's own window opens and the tool waits for you to finish it.
 
 Where to put them:
 
@@ -137,8 +163,20 @@ See `presets/example.json`. Every section is optional.
 | `files` | `{source, destination}` (the source can be a URL, `files:<name>`, or a path relative to the preset) or `{destination, content}` for a text file |
 | `tweaks` | `TweakName: true` to apply, `false` to undo |
 | `registry` | Raw values: `{path, name, type, value}` |
-| `features.enable` / `features.disable` | Optional feature names |
+| `features.enable` / `features.disable` | Optional feature names. These run first, because some apps need them to install |
+| `installerRoot` | Folder for local installers (see *Installing from a USB stick or share*) |
+| `copyFolders` | `{source, destination}`: whole folders copied with robocopy (newer files win, nothing deleted). The source can start with `*:\` |
+| `shortcuts` | `{name, target, args?, icon?, folder?}`, where folder is `Desktop` (default), `PublicDesktop`, `StartMenu` or a path |
+| `removeShortcuts` | Shortcut files to delete, e.g. `%PUBLIC%\\Desktop\\Microsoft Edge.lnk` |
+| `wallpaper` | Picture file (local, relative to the preset, `*:\...`, or a URL). Pictures from a USB stick are copied to Public Pictures first |
+| `startLayout` | A Windows 11 `start2.bin` (Start menu pins) to copy in |
+
+Power settings are tweaks, so they appear on the Tweaks tab with Undo: `NeverSleepPluggedIn`, `DisplayAlwaysOnPluggedIn`, `PowerButtonShutsDown` and `BestPerformancePowerMode`. They change every power plan.
+
+`presets/machine-pc.json` is the setup captured from the reference machine PC. It expects a USB stick with the `TECHNICAL DATA` folder at its root, installs the machine software from `TECHNICAL DATA\SOFTWARE`, and copies the whole folder to the desktop.
+
+When you load a preset in the window, the sections the window has no controls for (wallpaper, shortcuts, copied folders, files, registry) are kept, and run with **Run everything**.
 
 ## Status
 
-Version 0.1.0. It hasn't been run on Windows yet. Test it in a VM or on a spare PC before you publish the link. The winget IDs were written from memory and should be checked with `winget search`.
+Version 0.2.0. Version 0.2.0 adds power, wallpaper, shortcut, local-installer and folder-copy options, and these haven't been run on Windows yet either. Test it in a VM or on a spare PC before you publish the link. The winget IDs were written from memory and should be checked with `winget search`.

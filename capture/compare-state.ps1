@@ -68,7 +68,9 @@ function Read-JsonObject([string]$Dir, [string]$Name) {
 $sysB = Read-JsonObject $B 'system.json'
 $sysA = Read-JsonObject $A 'system.json'
 if (-not $OutputDir) {
-    $OutputDir = Join-Path (Split-Path $A -Parent) ("report-$($sysA.ComputerName)-$(Get-Date -Format 'yyyyMMdd-HHmmss')")
+    $parent = Split-Path $A -Parent
+    if ($parent -like "$env:windir*" -or $parent -like "$env:TEMP*") { $parent = [Environment]::GetFolderPath('Desktop') }
+    $OutputDir = Join-Path $parent ("report-$($sysA.ComputerName)-$(Get-Date -Format 'yyyyMMdd-HHmmss')")
 }
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 

@@ -1,0 +1,159 @@
+{
+  "restorePoint": true,
+  "apps": {
+    "install": [
+      "VideoLAN.VLC",
+      "TheDocumentFoundation.LibreOffice",
+      "SolidWorks.eDrawings",
+      "Jabra.Direct",
+      "Microsoft.PowerToys",
+      "Microsoft.VCRedist.2005.x86",
+      "Microsoft.VCRedist.2010.x64",
+      "Microsoft.VCRedist.2015+.x64",
+      "Microsoft.VCRedist.2015+.x86",
+      "Microsoft.DotNet.Runtime.8",
+      "Microsoft.DotNet.AspNetCore.8",
+      {
+        "name": "QCAD/CAM Professional",
+        "path": "QCAD",
+        "detect": "QCAD/CAM*"
+      },
+      {
+        "name": "Schneider Electric SoMove",
+        "path": "SOMOVE",
+        "detect": "SoMove*"
+      },
+      {
+        "name": "SICK SOPAS Engineering Tool",
+        "path": "SOPAS",
+        "detect": "SOPAS Engineering Tool*"
+      },
+      {
+        "name": "Festo Configuration Tool",
+        "path": "FESTO",
+        "detect": "Festo Configuration Tool*"
+      },
+      {
+        "name": "Macrium Reflect Free",
+        "path": "MACRIUM REFLECT",
+        "detect": "Macrium Reflect*"
+      },
+      {
+        "name": "RevolutionCommissioner",
+        "path": "COMMISSIONING TOOL",
+        "detect": "RevolutionCommissioner*"
+      }
+    ],
+    "upgradeAll": true
+  },
+  "folders": [
+    "%USERPROFILE%\\Desktop\\PARAMETERS",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\DEVICE MANUALS",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\DRIVE FILES",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\MANUALS AND DIAGRAMS\\ELECTRICAL",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\MANUALS AND DIAGRAMS\\GLUE DATA SHEETS",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\MANUALS AND DIAGRAMS\\MACHINE DIAGRAMS",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\MANUALS AND DIAGRAMS\\OPERATING MANUALS",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\MANUALS AND DIAGRAMS\\PROJECTION",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\MANUALS AND DIAGRAMS\\QCAD",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\MANUALS AND DIAGRAMS\\SERVICE",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\MANUALS AND DIAGRAMS\\SOFTWARE",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\PLC & HMI\\HMI SOFTWARE",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\PLC & HMI\\PLC FIRMWARE",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\PLC & HMI\\PLC PROGRAM",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\PROJECTION SYSTEM\\ACCESSORIES",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\PROJECTION SYSTEM\\BARCODES",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\PROJECTION SYSTEM\\DXF",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\PROJECTION SYSTEM\\EXPORTPDF",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\PROJECTION SYSTEM\\PDF",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\PROJECTION SYSTEM\\POSITIONS",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\PROJECTION SYSTEM\\TEMPLATES",
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA\\SOFTWARE",
+    "%PUBLIC%\\Documents\\LOG FILES",
+    "%PUBLIC%\\Documents\\SAVED LOG FILES"
+  ],
+  "quickAccess": [
+    "%USERPROFILE%\\Desktop\\TECHNICAL DATA"
+  ],
+  "tweaks": {
+    "ShowFileExtensions": true,
+    "TaskbarAlignLeft": true,
+    "HideTaskbarSearch": true,
+    "HideTaskViewButton": true,
+    "HideWidgets": true,
+    "TaskbarEndTask": true,
+    "TitleBarFullPath": true,
+    "DisableNotifications": true,
+    "EnableLongPaths": true,
+    "DisplayScaling100": true,
+    "NoEdgeDesktopShortcut": true,
+    "DefaultWallpaper": true,
+    "NeverSleepPluggedIn": true,
+    "DisplayAlwaysOnPluggedIn": true,
+    "PowerButtonShutsDown": true,
+    "BestPerformancePowerMode": true
+  },
+  "registry": [
+    {
+      "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced",
+      "name": "TaskbarDa",
+      "type": "DWord",
+      "value": 0
+    }
+  ],
+  "features": {
+    "enable": [
+      "NetFx3",
+      "NetFx4Extended-ASPNET45",
+      "IIS-WebServerRole",
+      "IIS-WebServer",
+      "IIS-CommonHttpFeatures",
+      "IIS-DefaultDocument",
+      "IIS-ApplicationDevelopment",
+      "IIS-ASPNET45",
+      "IIS-NetFxExtensibility",
+      "IIS-NetFxExtensibility45",
+      "IIS-ISAPIExtensions",
+      "IIS-ISAPIFilter",
+      "IIS-Security",
+      "IIS-RequestFiltering",
+      "WAS-WindowsActivationService",
+      "WAS-ProcessModel",
+      "WAS-NetFxEnvironment",
+      "WAS-ConfigurationAPI",
+      "WCF-HTTP-Activation",
+      "WCF-NonHTTP-Activation",
+      "WCF-HTTP-Activation45",
+      "WCF-TCP-Activation45",
+      "WCF-Pipe-Activation45",
+      "WCF-MSMQ-Activation45",
+      "MSMQ-Container",
+      "MSMQ-Server"
+    ],
+    "disable": []
+  },
+  "installerRoot": "*:\\TECHNICAL DATA\\SOFTWARE",
+  "copyFolders": [
+    {
+      "source": "*:\\TECHNICAL DATA",
+      "destination": "%USERPROFILE%\\Desktop\\TECHNICAL DATA"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "LOG FILES",
+      "target": "%PUBLIC%\\Documents\\LOG FILES"
+    },
+    {
+      "name": "SAVED LOG FILES",
+      "target": "%PUBLIC%\\Documents\\SAVED LOG FILES"
+    }
+  ],
+  "startLayout": "machine-pc\\start2.bin",
+  "_notes": {
+    "usbStick": "Copy the TECHNICAL DATA folder (with SOFTWARE inside, one folder per app) to the root of a USB stick. The tool finds it on any drive letter, installs the apps from it and copies the whole folder to the desktop.",
+    "installers": "Installers with no silent switches open their own window; click through each one. Add \"args\" to an app once its silent switches are known.",
+    "storeApps": "DXF Thumbnails (Microsoft Store) still has to be installed from the Store.",
+    "startLayout": "machine-pc\\start2.bin is the Start menu pin file from the reference PC."
+  }
+}

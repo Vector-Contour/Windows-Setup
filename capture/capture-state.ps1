@@ -32,7 +32,13 @@ $ErrorActionPreference = 'Continue'
 $ProgressPreference = 'SilentlyContinue'
 Set-StrictMode -Off
 
+# Windows PowerShell leaves $PSScriptRoot empty in param defaults when run with
+# powershell.exe -File, so fall back here: script folder, then current folder.
+if (-not $OutputRoot) { $OutputRoot = $PSScriptRoot }
+if (-not $OutputRoot -and $MyInvocation.MyCommand.Path) { $OutputRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
 if (-not $OutputRoot) { $OutputRoot = (Get-Location).Path }
+# Never write into the Windows folder (an admin prompt starts in System32).
+if ($OutputRoot -like "$env:windir*") { $OutputRoot = [Environment]::GetFolderPath('Desktop') }
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $safeLabel = ($Label -replace '[^\w\-]', '_')
 $Out = Join-Path $OutputRoot "snapshot-$safeLabel-$env:COMPUTERNAME-$stamp"

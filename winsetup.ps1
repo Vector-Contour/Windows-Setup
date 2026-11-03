@@ -25,7 +25,7 @@ param(
 )
 
 $AppName = 'VectorContour Windows Setup'
-$AppVersion = '0.1.0'
+$AppVersion = '0.2.0'
 $SourceUrl = 'https://raw.githubusercontent.com/Vector-Contour/Windows-Setup/main/winsetup.ps1'
 
 $ErrorActionPreference = 'Stop'
@@ -287,6 +287,85 @@ $Engine = {
             On = @(@{ Path = 'HKCU:\Control Panel\Desktop'; Name = 'MenuShowDelay'; Type = 'String'; Value = '100' })
             Off = @(@{ Path = 'HKCU:\Control Panel\Desktop'; Name = 'MenuShowDelay'; Type = 'String'; Value = '400' })
         }
+        TaskbarEndTask              = @{
+            Label = 'End task on taskbar right-click'; Recommended = $false
+            Description = 'Add "End task" to the right-click menu of taskbar apps.'
+            On = @(@{ Path = "$adv\TaskbarDeveloperSettings"; Name = 'TaskbarEndTask'; Value = 1 })
+            Off = @(@{ Path = "$adv\TaskbarDeveloperSettings"; Name = 'TaskbarEndTask'; Value = 0 })
+        }
+        TitleBarFullPath            = @{
+            Label = 'Full path in File Explorer title bar'; Recommended = $false
+            Description = 'Show the whole folder path at the top of File Explorer windows.'
+            On = @(@{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CabinetState'; Name = 'FullPath'; Value = 1 })
+            Off = @(@{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\CabinetState'; Name = 'FullPath'; Value = 0 })
+        }
+        DisableNotifications        = @{
+            Label = 'Turn off notifications'; Recommended = $false
+            Description = 'No pop-up notifications from apps or Windows (Settings > System > Notifications).'
+            On = @(@{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications'; Name = 'ToastEnabled'; Value = 0 })
+            Off = @(@{ Path = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\PushNotifications'; Name = 'ToastEnabled'; Value = 1 })
+        }
+        EnableLongPaths             = @{
+            Label = 'Allow long file paths'; Recommended = $false
+            Description = 'Let apps use paths longer than 260 characters (deep folder trees, long file names).'
+            On = @(@{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'; Name = 'LongPathsEnabled'; Value = 1 })
+            Off = @(@{ Path = 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'; Name = 'LongPathsEnabled'; Value = 0 })
+        }
+        DisplayScaling100           = @{
+            Label = 'Display scaling 100%'; Recommended = $false
+            Description = 'Fixed 100% text and app size on every screen. Takes effect after signing out. Undo goes back to the Windows default for each screen.'
+            On = @(
+                @{ Path = 'HKCU:\Control Panel\Desktop'; Name = 'LogPixels'; Value = 96 }
+                @{ Path = 'HKCU:\Control Panel\Desktop'; Name = 'Win8DpiScaling'; Value = 1 }
+            )
+            Off = @(
+                @{ Path = 'HKCU:\Control Panel\Desktop'; Name = 'LogPixels'; Value = $null }
+                @{ Path = 'HKCU:\Control Panel\Desktop'; Name = 'Win8DpiScaling'; Value = 0 }
+            )
+        }
+        NoEdgeDesktopShortcut       = @{
+            Label = 'No Edge shortcut on the desktop'; Recommended = $false
+            Description = 'Remove the Microsoft Edge desktop shortcut and stop Edge updates putting it back.'
+            On = @(@{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate'; Name = 'CreateDesktopShortcutDefault'; Value = 0 })
+            Off = @(@{ Path = 'HKLM:\SOFTWARE\Policies\Microsoft\EdgeUpdate'; Name = 'CreateDesktopShortcutDefault'; Value = $null })
+            Apply = { Remove-Shortcuts @('%PUBLIC%\Desktop\Microsoft Edge.lnk', '%USERPROFILE%\Desktop\Microsoft Edge.lnk') }
+        }
+        DefaultWallpaper            = @{
+            Label = 'Plain Windows wallpaper'; Recommended = $false
+            Description = 'Use the standard Windows picture instead of Windows Spotlight.'
+            Apply = { Set-Wallpaper "$env:windir\Web\Wallpaper\Windows\img0.jpg" }
+        }
+        # Power: plugged-in (AC) settings, applied to every power plan.
+        NeverSleepPluggedIn         = @{
+            Label = 'Never sleep when plugged in'; Recommended = $false
+            Description = 'The PC stays awake. Undo sets sleep back to 30 minutes.'
+            Apply = { Set-PowerSetting 'Sleep after' SUB_SLEEP STANDBYIDLE 0 }
+            Undo = { Set-PowerSetting 'Sleep after' SUB_SLEEP STANDBYIDLE 1800 }
+        }
+        DisplayAlwaysOnPluggedIn    = @{
+            Label = 'Never turn off the display when plugged in'; Recommended = $false
+            Description = 'The screen stays on. Undo sets it back to 10 minutes.'
+            Apply = { Set-PowerSetting 'Turn off display after' SUB_VIDEO VIDEOIDLE 0 }
+            Undo = { Set-PowerSetting 'Turn off display after' SUB_VIDEO VIDEOIDLE 600 }
+        }
+        PowerButtonShutsDown        = @{
+            Label = 'Power and sleep buttons shut down'; Recommended = $false
+            Description = 'Pressing the power (or sleep) button shuts the PC down instead of sleeping. Undo sets them back to sleep.'
+            Apply = {
+                Set-PowerSetting 'Power button' SUB_BUTTONS PBUTTONACTION 3 -Battery
+                Set-PowerSetting 'Sleep button' SUB_BUTTONS SBUTTONACTION 3 -Battery
+            }
+            Undo = {
+                Set-PowerSetting 'Power button' SUB_BUTTONS PBUTTONACTION 1 -Battery
+                Set-PowerSetting 'Sleep button' SUB_BUTTONS SBUTTONACTION 1 -Battery
+            }
+        }
+        BestPerformancePowerMode    = @{
+            Label = 'Best performance power mode'; Recommended = $false
+            Description = 'Settings > System > Power > Power mode: Best performance. Undo goes back to Balanced.'
+            Apply = { Set-PowerMode 'Best performance' }
+            Undo = { Set-PowerMode 'Balanced' }
+        }
     }
 
     $BuiltInAppCatalog = [ordered]@{
@@ -546,7 +625,11 @@ $Engine = {
     #   detect - DisplayName in Apps & features (wildcards OK), used to skip it if already installed
     #   target - folder for zip / portable apps (default C:\Tools\<name>)
     #   sha256 - optional checksum for fixed-version links
-    function Install-DirectApp($App) {
+    # Or, instead of a download, a local installer:
+    #   path   - an installer file, or a folder holding one (an .msi is preferred over an .exe).
+    #            Relative paths are looked up in the preset's installerRoot, else next to the preset.
+    #            Wildcards are fine (SoMove*.exe); *:\ searches every drive (see Resolve-SourcePath).
+    function Install-DirectApp($App, [string]$BaseDir, [string]$Root) {
         $name = $App.name
         $type = $App.type
         $target = if ($App.target) { Expand-PathVars $App.target } else { "C:\Tools\$name" }
@@ -554,22 +637,54 @@ $Engine = {
         if ($App.detect -and (Test-AppInstalled $App.detect)) { Write-Skip "$name (already installed)"; return }
         if (Test-PrivatePending $App.url "Install $name") { return }
         if ($type -in 'zip', 'portable' -and -not $App.detect -and (Test-Path $target)) { Write-Skip "$name (already in $target)"; return }
+
+        $localFile = $null
+        if ($App.path) {
+            $base = $BaseDir
+            if ($Root) {
+                $rootDir = Resolve-SourcePath $Root $BaseDir
+                if ($rootDir) { $base = $rootDir }
+            }
+            $found = Resolve-SourcePath $App.path $base
+            if ($found -and (Test-Path $found -PathType Container)) {
+                $files = @(Get-ChildItem -Path $found -File -Include *.msi, *.exe -Recurse -Depth 1 -ErrorAction SilentlyContinue)
+                $found = ($files | Sort-Object @{ e = { $_.Extension -ne '.msi' } }, @{ e = { $_.Name -notmatch 'setup|install' } }, Name |
+                        Select-Object -First 1).FullName
+                if ($files.Count -gt 1) { Write-Log "    $name : $($files.Count) installers in the folder, using $(Split-Path -Leaf $found)" 'Yellow' }
+            }
+            if (-not $found) {
+                Write-Log "  [fail] $name : installer not found at $($App.path)$(if ($Root) { " (installerRoot $Root)" })" 'Red'
+                $script:Stats.Failed++; return
+            }
+            $localFile = $found
+            if (-not $type) { $type = switch -Regex ($found) { '\.msi$' { 'msi' } '\.zip$' { 'zip' } default { 'exe' } } }
+        }
+
         if ($type -ne 'msi' -and $type -notin 'zip', 'portable' -and -not $App.args) {
             Write-Log "    $name has no silent switches, so its installer window may open." 'Yellow'
         }
 
-        Write-Log "  Downloading $name ..."
-        Invoke-Step "Install $name (direct download)" {
-            $url = Resolve-DownloadUrl $App
-            $file = if (Test-ReleaseSource $url) { $url -replace '^\w+:' } else { [IO.Path]::GetFileName(([Uri]$url).AbsolutePath) }
+        $how = if ($localFile) { "from $localFile" } else { '(direct download)' }
+        if (-not $localFile) { Write-Log "  Downloading $name ..." }
+        Invoke-Step "Install $name $how" {
+            if ($localFile) {
+                $path = $localFile
+                $file = Split-Path -Leaf $path
+            }
+            else {
+                $url = Resolve-DownloadUrl $App
+                $file = if (Test-ReleaseSource $url) { $url -replace '^\w+:' } else { [IO.Path]::GetFileName(([Uri]$url).AbsolutePath) }
+            }
             if (-not $type) {
                 $type = switch -Regex ($file) { '\.msi$' { 'msi' } '\.zip$' { 'zip' } default { 'exe' } }
             }
-            if (-not $file) { $file = "$name.$type" }
-            $dir = Join-Path $env:TEMP 'winsetup-downloads'
-            New-Item -ItemType Directory -Path $dir -Force | Out-Null
-            $path = Join-Path $dir $file
-            Save-RemoteFile $url $path
+            if (-not $localFile) {
+                if (-not $file) { $file = "$name.$type" }
+                $dir = Join-Path $env:TEMP 'winsetup-downloads'
+                New-Item -ItemType Directory -Path $dir -Force | Out-Null
+                $path = Join-Path $dir $file
+                Save-RemoteFile $url $path
+            }
             if ($App.sha256 -and (Get-FileHash $path -Algorithm SHA256).Hash -ne $App.sha256) { throw 'checksum does not match' }
 
             $proc = $null
@@ -605,14 +720,14 @@ $Engine = {
     }
 
     # $Apps: winget IDs, catalog Ids ("direct:..."), or direct-download objects.
-    function Install-Apps($Apps) {
+    function Install-Apps($Apps, [string]$BaseDir, [string]$Root) {
         $Apps = @($Apps | Where-Object { $_ })
         if (-not $Apps) { return }
         Write-Section 'Install apps'
         $wingetReady = $null
         foreach ($a in $Apps) {
             $app = if ($a -is [string]) { $AppIndex[$a] } else { $a }
-            if ($app -and ($app.url -or $app.github -or $app.page)) { Install-DirectApp $app; continue }
+            if ($app -and ($app.url -or $app.github -or $app.page -or $app.path)) { Install-DirectApp $app $BaseDir $Root; continue }
 
             $id = if ($a -is [string]) { $a } else { $a.id }
             if ($null -eq $wingetReady) { $wingetReady = Initialize-Winget }
@@ -741,7 +856,11 @@ $Engine = {
             $before = $script:Stats.Changed
             $entries = if ($apply) { $tweak.On } else { $tweak.Off }
             foreach ($e in $entries) { Set-RegistryEntry @e }
-            if ($script:Stats.Changed -gt $before) { $script:RestartExplorer = $true }
+            # Tweaks that aren't plain registry values (power, wallpaper...) use script blocks.
+            $block = if ($apply) { $tweak.Apply } else { $tweak.Undo }
+            if ($block) { & $block }
+            elseif (-not $entries) { Write-Skip "$($tweak.Label) (nothing to undo)" }
+            if ($script:Stats.Changed -gt $before -and $entries) { $script:RestartExplorer = $true }
         }
     }
 
@@ -751,6 +870,197 @@ $Engine = {
         foreach ($r in $Entries) {
             $type = if ($r.type) { $r.type } else { 'DWord' }
             Set-RegistryEntry -Path $r.path -Name $r.name -Type $type -Value $r.value
+        }
+    }
+
+    # ---- Power ----
+
+    # Current value of a power setting in one plan (AC or DC), or $null if it can't be read.
+    function Get-PowerIndex([string]$Scheme, [string]$Sub, [string]$Setting, [switch]$Battery) {
+        $out = powercfg /query $Scheme $Sub $Setting 2>$null
+        $label = if ($Battery) { 'Current DC Power Setting Index' } else { 'Current AC Power Setting Index' }
+        $line = $out | Where-Object { $_ -match $label } | Select-Object -First 1
+        if ($line -match '0x([0-9a-fA-F]+)') { return [Convert]::ToInt32($Matches[1], 16) }
+        return $null
+    }
+
+    # Sets a plugged-in power setting (and on battery with -Battery) in every power plan.
+    # $Sub / $Setting are powercfg aliases, e.g. SUB_SLEEP STANDBYIDLE (seconds).
+    function Set-PowerSetting([string]$Label, [string]$Sub, [string]$Setting, [int]$Value, [switch]$Battery) {
+        $schemes = @(powercfg /list | ForEach-Object { if ($_ -match '([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})') { $Matches[1] } })
+        $modes = @('AC') + @(if ($Battery) { 'DC' })
+        foreach ($s in $schemes) {
+            foreach ($m in $modes) {
+                $current = Get-PowerIndex $s $Sub $Setting -Battery:($m -eq 'DC')
+                if ($current -eq $Value) { Write-Skip "$Label ($m, plan $s) = $Value"; continue }
+                Invoke-Step "Set $Label ($m, plan $s) = $Value" {
+                    $verb = if ($m -eq 'AC') { '/setacvalueindex' } else { '/setdcvalueindex' }
+                    powercfg $verb $s $Sub $Setting $Value
+                    if ($LASTEXITCODE -ne 0) { throw "powercfg exit code $LASTEXITCODE" }
+                }
+            }
+        }
+        if (-not $DryRun) { powercfg /setactive SCHEME_CURRENT | Out-Null }
+    }
+
+    # The Power mode slider in Settings (a power overlay on top of the plan).
+    function Set-PowerMode([string]$Mode) {
+        $overlays = @{
+            'Best performance' = 'ded574b5-45a0-4f42-8737-46345c09c238'
+            'Balanced'         = '00000000-0000-0000-0000-000000000000'
+            'Best efficiency'  = '961cc777-2547-4f9d-8174-7d86181b8a7a'
+        }
+        $guid = $overlays[$Mode]
+        $key = 'HKLM:\SYSTEM\CurrentControlSet\Control\Power\User\PowerSchemes'
+        $current = (Get-ItemProperty -Path $key -Name ActiveOverlayAcPowerScheme -ErrorAction SilentlyContinue).ActiveOverlayAcPowerScheme
+        if (-not $current) { $current = $overlays['Balanced'] }
+        if ($current -eq $guid) { Write-Skip "Power mode = $Mode"; return }
+        Invoke-Step "Set power mode to $Mode" {
+            powercfg /overlaysetactive $guid
+            if ($LASTEXITCODE -ne 0) { throw "powercfg exit code $LASTEXITCODE" }
+        }
+    }
+
+    # ---- Desktop: wallpaper, shortcuts, Start layout ----
+
+    # Finds a local file or folder. $Path can use %VARS%, be relative to the preset
+    # file ($BaseDir), or start with *:\ to look on every drive (handy for USB sticks
+    # whose drive letter changes). Wildcards in the file name are allowed.
+    function Resolve-SourcePath([string]$Path, [string]$BaseDir) {
+        if (-not $Path) { return $null }
+        $p = Expand-PathVars $Path
+        $candidates = @()
+        if ($p -match '^\*:\\(.*)$') {
+            $rest = $Matches[1]
+            $candidates = @(Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Root -match '^[A-Z]:\\$' } | ForEach-Object { Join-Path $_.Root $rest })
+        }
+        elseif (-not [IO.Path]::IsPathRooted($p) -and $BaseDir) { $candidates = @(Join-Path $BaseDir $p) }
+        else { $candidates = @($p) }
+        foreach ($c in $candidates) {
+            $hit = Get-Item -Path $c -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            if ($hit) { return $hit.FullName }
+        }
+        return $null
+    }
+
+    function Set-Wallpaper([string]$Source, [string]$BaseDir) {
+        if (-not $Source) { return }
+        if ($Source -match '^https?://') {
+            $dir = Join-Path $env:PUBLIC 'Pictures\Wallpaper'
+            $path = Join-Path $dir ([IO.Path]::GetFileName(([Uri]$Source).AbsolutePath))
+            if (-not (Test-Path $path)) {
+                Invoke-Step "Download wallpaper $Source" {
+                    New-Item -ItemType Directory -Path $dir -Force | Out-Null
+                    Invoke-WebRequest -Uri $Source -OutFile $path -UseBasicParsing
+                }
+            }
+        }
+        else {
+            $path = Resolve-SourcePath $Source $BaseDir
+            if (-not $path) { Write-Log "  [fail] Wallpaper not found: $Source" 'Red'; $script:Stats.Failed++; return }
+            # Copy pictures from a USB stick or share so the wallpaper survives it being removed.
+            if ($path -notlike "$env:windir*" -and $path -notlike "$env:SystemDrive\Users\*") {
+                $dir = Join-Path $env:PUBLIC 'Pictures\Wallpaper'
+                $local = Join-Path $dir (Split-Path -Leaf $path)
+                if (-not (Test-Path $local)) {
+                    $from = $path
+                    Invoke-Step "Copy wallpaper to $local" {
+                        New-Item -ItemType Directory -Path $dir -Force | Out-Null
+                        Copy-Item -Path $from -Destination $local -Force
+                    }
+                }
+                $path = $local
+            }
+        }
+        $current = (Get-ItemProperty -Path 'HKCU:\Control Panel\Desktop' -Name WallPaper -ErrorAction SilentlyContinue).WallPaper
+        if ($current -eq $path) { Write-Skip "Wallpaper = $path"; return }
+        Invoke-Step "Set wallpaper to $path" {
+            if (-not ('WinSetup.Wallpaper' -as [type])) {
+                Add-Type -Namespace WinSetup -Name Wallpaper -MemberDefinition @'
+[DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+public static extern bool SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
+'@
+            }
+            # BackgroundType 0 = picture (turns off Windows Spotlight and slideshow).
+            $wp = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Wallpapers'
+            if (-not (Test-Path $wp)) { New-Item -Path $wp -Force | Out-Null }
+            New-ItemProperty -Path $wp -Name BackgroundType -PropertyType DWord -Value 0 -Force | Out-Null
+            # 20 = SPI_SETDESKWALLPAPER; 3 = save to the profile and tell running apps.
+            if (-not [WinSetup.Wallpaper]::SystemParametersInfo(20, 0, $path, 3)) { throw 'Windows refused the picture' }
+        }
+    }
+
+    # $Shortcuts: objects with name, target, and optionally args, icon, folder
+    # (Desktop = your desktop [default], PublicDesktop = everyone's, StartMenu, or any path).
+    function New-Shortcuts($Shortcuts) {
+        $Shortcuts = @($Shortcuts | Where-Object { $_ })
+        if (-not $Shortcuts) { return }
+        Write-Section 'Shortcuts'
+        $wsh = New-Object -ComObject WScript.Shell
+        foreach ($s in $Shortcuts) {
+            $folder = switch ($s.folder) {
+                { -not $_ -or $_ -eq 'Desktop' } { [Environment]::GetFolderPath('Desktop'); break }
+                'PublicDesktop' { Join-Path $env:PUBLIC 'Desktop'; break }
+                'StartMenu' { Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'; break }
+                default { Expand-PathVars $_ }
+            }
+            $lnk = Join-Path $folder "$($s.name).lnk"
+            $target = Expand-PathVars $s.target
+            if (Test-Path $lnk) {
+                if ($wsh.CreateShortcut($lnk).TargetPath -eq $target) { Write-Skip "$lnk (exists)"; continue }
+            }
+            $item = $s
+            Invoke-Step "Shortcut $lnk -> $target" {
+                New-Item -ItemType Directory -Path $folder -Force | Out-Null
+                $sc = $wsh.CreateShortcut($lnk)
+                $sc.TargetPath = $target
+                if ($item.args) { $sc.Arguments = $item.args }
+                if ($item.icon) { $sc.IconLocation = Expand-PathVars $item.icon }
+                if (Test-Path $target -PathType Leaf) { $sc.WorkingDirectory = Split-Path -Parent $target }
+                $sc.Save()
+            }
+        }
+    }
+
+    function Remove-Shortcuts([string[]]$Paths) {
+        foreach ($p in @($Paths | Where-Object { $_ })) {
+            $path = Expand-PathVars $p
+            if (-not (Test-Path $path)) { Write-Skip "$path (already gone)"; continue }
+            Invoke-Step "Remove $path" { Remove-Item -Path $path -Force }
+        }
+    }
+
+    # Copies whole folders (manuals, drive files...) with robocopy. Newer files win,
+    # nothing is deleted at the destination.
+    function Copy-Folders($Items, [string]$BaseDir) {
+        $Items = @($Items | Where-Object { $_ })
+        if (-not $Items) { return }
+        Write-Section 'Copy folders'
+        foreach ($i in $Items) {
+            $src = Resolve-SourcePath $i.source $BaseDir
+            $dst = Expand-PathVars $i.destination
+            if (-not $src) { Write-Log "  [fail] Source folder not found: $($i.source)" 'Red'; $script:Stats.Failed++; continue }
+            Invoke-Step "Copy $src -> $dst" {
+                robocopy $src $dst /E /XO /R:1 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+                # Robocopy exit codes below 8 mean success.
+                if ($LASTEXITCODE -ge 8) { throw "robocopy exit code $LASTEXITCODE" }
+            }
+        }
+    }
+
+    # Windows 11 keeps the Start menu pins in start2.bin (copy it from a set-up PC:
+    # %LOCALAPPDATA%\Packages\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\LocalState).
+    function Set-StartLayout([string]$Source, [string]$BaseDir) {
+        if (-not $Source) { return }
+        Write-Section 'Start menu pins'
+        $src = Resolve-SourcePath $Source $BaseDir
+        if (-not $src) { Write-Log "  [fail] Start layout not found: $Source" 'Red'; $script:Stats.Failed++; return }
+        $dst = Join-Path $env:LOCALAPPDATA 'Packages\Microsoft.Windows.StartMenuExperienceHost_cw5n1h2txyewy\LocalState\start2.bin'
+        if ((Test-Path $dst) -and (Get-FileHash $src).Hash -eq (Get-FileHash $dst).Hash) { Write-Skip 'Start pins (up to date)'; return }
+        Invoke-Step "Copy Start pins from $src" {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $dst) -Force | Out-Null
+            Copy-Item -Path $src -Destination $dst -Force
+            Stop-Process -Name StartMenuExperienceHost -Force -ErrorAction SilentlyContinue
         }
     }
 
@@ -796,16 +1106,22 @@ $Engine = {
     function Invoke-Preset($Config, [string]$BaseDir) {
         $tweaks = ConvertTo-TweakTable $Config.tweaks
         if ($Config.restorePoint -ne $false -and ($tweaks.Count -or $Config.registry -or $Config.removeApps)) { New-RestorePoint }
-        Install-Apps @($Config.apps.install)
+        # Features first: some apps (e.g. ones needing .NET 3.5 or IIS) won't install without them.
+        Set-Features @($Config.features.enable) @($Config.features.disable)
+        Install-Apps @($Config.apps.install) $BaseDir $Config.installerRoot
         if ($Config.apps.upgradeAll) { Update-AllApps }
         Remove-BuiltInApps @($Config.removeApps)
         foreach ($t in @($Config.folderTemplates | Where-Object { $_ })) { Invoke-FolderTemplate $t $BaseDir }
         New-Folders @($Config.folders)
+        Copy-Folders $Config.copyFolders $BaseDir
         Add-QuickAccess @($Config.quickAccess)
         Copy-ConfigFiles $Config.files $BaseDir
+        New-Shortcuts $Config.shortcuts
+        if ($Config.removeShortcuts) { Write-Section 'Remove shortcuts'; Remove-Shortcuts @($Config.removeShortcuts) }
+        if ($Config.wallpaper) { Write-Section 'Wallpaper'; Set-Wallpaper $Config.wallpaper $BaseDir }
+        Set-StartLayout $Config.startLayout $BaseDir
         Set-Tweaks $tweaks
         Set-RegistryValues $Config.registry
-        Set-Features @($Config.features.enable) @($Config.features.disable)
     }
 }
 
@@ -904,7 +1220,7 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
       <DockPanel>
         <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
           <CheckBox x:Name="DryRunBox" Content="Dry run (preview only)" VerticalAlignment="Center" Margin="0,0,16,0"/>
-          <Button x:Name="RunAllBtn" Content="Run everything selected"/>
+          <Button x:Name="RunAllBtn" Content="Run what's ticked on the tabs" Style="{StaticResource Secondary}"/>
         </StackPanel>
         <StackPanel>
           <TextBlock x:Name="TitleText" FontSize="20" FontWeight="SemiBold"/>
@@ -925,6 +1241,31 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
     </Border>
 
     <TabControl x:Name="Tabs" Background="#1D2030" BorderThickness="0" Padding="16" Margin="12,10,12,0">
+      <TabItem Header="Review &amp; go">
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Background="#14161F" CornerRadius="8" Padding="16,14" Margin="0,0,0,12">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" VerticalAlignment="Center">
+                <Button x:Name="GoBtn" Content="Looks good, go" FontSize="16" Padding="26,10" Background="#2EA043" Margin="0,0,0,6"/>
+                <Button x:Name="PreviewBtn" Content="Preview first (changes nothing)" Style="{StaticResource Secondary}" Margin="0"/>
+              </StackPanel>
+              <StackPanel>
+                <TextBlock x:Name="ReviewTitle" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <TextBlock x:Name="ReviewSub" Foreground="#8A8FA6" TextWrapping="Wrap" Margin="0,4,0,8"
+                           Text="Everything below is ticked and ready. Untick anything you don't want, or open a section to change folder names and locations."/>
+                <WrapPanel>
+                  <CheckBox x:Name="ReviewRestoreBox" Content="Create a restore point first" IsChecked="True" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                  <Button x:Name="ReviewExpandBtn" Content="Show all details" Style="{StaticResource Secondary}" Padding="10,4"/>
+                  <Button x:Name="ReviewFromTabsBtn" Content="Use what I picked on the other tabs" Style="{StaticResource Secondary}" Padding="10,4"/>
+                  <Button x:Name="ReviewLoadBtn" Content="Load a preset..." Style="{StaticResource Secondary}" Padding="10,4"/>
+                </WrapPanel>
+              </StackPanel>
+            </DockPanel>
+          </Border>
+          <ScrollViewer VerticalScrollBarVisibility="Auto"><StackPanel x:Name="ReviewPanel"/></ScrollViewer>
+        </DockPanel>
+      </TabItem>
+
       <TabItem Header="Install">
         <DockPanel>
           <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,12">
@@ -1078,7 +1419,7 @@ function Add-CustomApp($App) {
     if ($App -is [string]) { $tag = $App; $label = $App; $tip = "winget: $App" }
     else {
         $tag = "custom:$($App.name)"; $label = $App.name
-        $tip = if ($App.github) { "Latest release from github.com/$($App.github)" } elseif ($App.page) { "Latest link on $($App.page)" } else { $App.url }
+        $tip = if ($App.github) { "Latest release from github.com/$($App.github)" } elseif ($App.page) { "Latest link on $($App.page)" } elseif ($App.path) { "Local installer: $($App.path)" } else { $App.url }
     }
     $existing = $appBoxes | Where-Object { [string]$_.Tag -eq $tag } | Select-Object -First 1
     if ($existing) { $customApps[$tag] = $App; return $existing }
@@ -1174,7 +1515,7 @@ function Set-Checked($Boxes, [string[]]$Tags) { foreach ($b in $Boxes) { $b.IsCh
 # --- Background runner ---
 
 $allButtons = @('RunAllBtn', 'InstallBtn', 'UpgradeBtn', 'ApplyTweaksBtn', 'UndoTweaksBtn', 'RemoveAppsBtn',
-    'EnableFeaturesBtn', 'DisableFeaturesBtn', 'CreateFoldersBtn', 'ImportBtn')
+    'EnableFeaturesBtn', 'DisableFeaturesBtn', 'CreateFoldersBtn', 'ImportBtn', 'GoBtn', 'PreviewBtn', 'ReviewLoadBtn', 'ReviewFromTabsBtn')
 
 # Runs $Script (text) in a new runspace with the engine loaded and $Job available.
 function Start-EngineJob([string]$Script, $Job) {
@@ -1226,10 +1567,17 @@ $timer.Start()
 
 # --- Build and load presets ---
 
+# Preset sections the window has no controls for (power is a tweak, but wallpaper,
+# shortcuts, copied folders, files, registry...). Kept from the loaded preset so
+# saving or running from the window doesn't drop them.
+$script:LoadedPreset = $null
+$script:LoadedBaseDir = $null
+$PassThroughKeys = 'installerRoot', 'files', 'registry', 'copyFolders', 'shortcuts', 'removeShortcuts', 'wallpaper', 'startLayout'
+
 function Get-SelectionPreset {
     $tweaks = [ordered]@{}
     foreach ($k in (Get-Checked $tweakBoxes)) { $tweaks[$k] = $true }
-    [ordered]@{
+    $p = [ordered]@{
         restorePoint = [bool]$ui.RestorePointBox.IsChecked
         apps         = [ordered]@{ install = @(Get-CheckedApps); upgradeAll = $false }
         removeApps   = @(Get-Checked $bloatBoxes)
@@ -1241,9 +1589,22 @@ function Get-SelectionPreset {
         registry     = @()
         features     = [ordered]@{ enable = @(Get-Checked $featureBoxes); disable = @() }
     }
+    if ($script:LoadedPreset) {
+        foreach ($k in $PassThroughKeys) {
+            if ($null -ne $script:LoadedPreset.$k) { $p[$k] = $script:LoadedPreset.$k }
+        }
+        $p.apps.upgradeAll = [bool]$script:LoadedPreset.apps.upgradeAll
+        $p.features.disable = @($script:LoadedPreset.features.disable | Where-Object { $_ })
+        # Features in the preset that aren't in the Features tab list.
+        $p.features.enable = @($p.features.enable) + @($script:LoadedPreset.features.enable | Where-Object { $_ -and -not $FeatureCatalog.Contains($_) })
+    }
+    $p
 }
 
-function Set-SelectionFromPreset($Config) {
+function Set-SelectionFromPreset($Config, [string]$BaseDir, [string]$Name = 'preset') {
+    $script:LoadedPreset = $Config
+    $script:LoadedBaseDir = $BaseDir
+    $extra = @($PassThroughKeys | Where-Object { $null -ne $Config.$_ })
     # Anything not in the catalog (other winget IDs, direct downloads) goes under "Your apps".
     $tags = foreach ($a in @($Config.apps.install | Where-Object { $_ })) {
         if ($a -isnot [string]) { [string](Add-CustomApp $a).Tag }
@@ -1260,6 +1621,250 @@ function Set-SelectionFromPreset($Config) {
     Set-Checked $templateBoxes @($Config.folderTemplates | Where-Object { $_ -is [string] })
     $ui.PinFoldersBox.IsChecked = [bool]$Config.quickAccess
     if ($null -ne $Config.restorePoint) { $ui.RestorePointBox.IsChecked = [bool]$Config.restorePoint }
+    Build-Review $Config $Name
+}
+
+# --- Review & go ---
+# One page listing everything that will happen, all ticked. Untick to skip, edit the
+# text boxes to change paths, then one button runs it.
+
+$script:ReviewItems = New-Object System.Collections.ArrayList
+$script:ReviewExpanders = New-Object System.Collections.ArrayList
+
+function New-ReviewText([string]$Text) {
+    $tb = New-Object System.Windows.Controls.TextBox
+    $tb.Text = $Text
+    $tb.Padding = '6,3'
+    $tb.Background = '#1D2030'
+    $tb.Foreground = 'White'
+    $tb.BorderBrush = '#2C3042'
+    $tb.FontFamily = 'Consolas'
+    $tb.VerticalAlignment = 'Center'
+    $tb
+}
+
+# One line in a section: a checkbox, and a text box when $EditText is given.
+function New-ReviewRow([string]$Key, [string]$Label, $Value, $EditText, [string]$Tip) {
+    $row = New-Object System.Windows.Controls.DockPanel
+    $row.Margin = '0,3'
+    $cb = New-Object System.Windows.Controls.CheckBox
+    $cb.IsChecked = $true
+    $cb.VerticalAlignment = 'Center'
+    $cb.Margin = '0'
+    if ($Label) { $cb.Content = $Label }
+    if ($Tip) { $cb.ToolTip = $Tip }
+    [System.Windows.Controls.DockPanel]::SetDock($cb, 'Left')
+    [void]$row.Children.Add($cb)
+    $tb = $null
+    if ($null -ne $EditText) {
+        $cb.Margin = '0,0,8,0'
+        $tb = New-ReviewText ([string]$EditText)
+        [void]$row.Children.Add($tb)
+    }
+    [void]$script:ReviewItems.Add([pscustomobject]@{ Key = $Key; Box = $cb; Text = $tb; Value = $Value })
+    $row
+}
+
+# A collapsible card. The header checkbox ticks or unticks the whole section.
+# $AddKey adds a "+ Add" button that appends an empty editable row.
+function Add-ReviewSection([string]$Title, [string]$Summary, $Rows, [string[]]$Keys, [string]$AddKey, [string]$AddLabel) {
+    $Rows = @($Rows | Where-Object { $_ })
+    if (-not $Rows -and -not $AddKey) { return }
+    $card = New-Object System.Windows.Controls.Border
+    $card.Background = '#14161F'
+    $card.CornerRadius = 8
+    $card.Padding = '12,8'
+    $card.Margin = '0,0,0,8'
+
+    $head = New-Object System.Windows.Controls.StackPanel
+    $head.Orientation = 'Horizontal'
+    $all = New-Object System.Windows.Controls.CheckBox
+    $all.IsChecked = $true
+    $all.Tag = $Keys
+    $all.Margin = '0,0,10,0'
+    $all.VerticalAlignment = 'Center'
+    $all.ToolTip = 'Tick or untick this whole section'
+    $all.Add_Click({ foreach ($i in $script:ReviewItems) { if ($this.Tag -contains $i.Key) { $i.Box.IsChecked = $this.IsChecked } } })
+    $t = New-Object System.Windows.Controls.TextBlock
+    $t.Text = $Title
+    $t.FontSize = 14
+    $t.FontWeight = 'SemiBold'
+    $t.VerticalAlignment = 'Center'
+    $s = New-Object System.Windows.Controls.TextBlock
+    $s.Text = "   $Summary"
+    $s.Foreground = '#8A8FA6'
+    $s.VerticalAlignment = 'Center'
+    [void]$head.Children.Add($all)
+    [void]$head.Children.Add($t)
+    [void]$head.Children.Add($s)
+
+    $list = New-Object System.Windows.Controls.StackPanel
+    $list.Margin = '28,6,0,4'
+    foreach ($r in $Rows) { [void]$list.Children.Add($r) }
+    if ($AddKey) {
+        $add = New-Object System.Windows.Controls.Button
+        $add.Content = "+ $AddLabel"
+        $add.Style = $window.FindResource('Secondary')
+        $add.HorizontalAlignment = 'Left'
+        $add.Padding = '10,3'
+        $add.Margin = '0,6,0,0'
+        $add.Tag = @{ Panel = $list; Key = $AddKey }
+        $add.Add_Click({
+                $p = $this.Tag
+                $p.Panel.Children.Insert($p.Panel.Children.Count - 1, (New-ReviewRow $p.Key '' $null ''))
+            })
+        [void]$list.Children.Add($add)
+    }
+
+    $exp = New-Object System.Windows.Controls.Expander
+    $exp.Header = $head
+    $exp.Content = $list
+    $exp.Foreground = '#E4E6F0'
+    $exp.IsExpanded = $false
+    [void]$script:ReviewExpanders.Add($exp)
+    $card.Child = $exp
+    [void]$ui.ReviewPanel.Children.Add($card)
+}
+
+function Get-AppLabel($App) {
+    if ($App -is [string]) {
+        if ($AppIndex.ContainsKey($App)) { return $AppIndex[$App].Name }
+        return $App
+    }
+    if ($App.path) { return "$($App.name)  (installer: $($App.path))" }
+    return "$($App.name)  (download)"
+}
+
+function Build-Review($Config, [string]$Name) {
+    $ui.ReviewPanel.Children.Clear()
+    $script:ReviewItems.Clear()
+    $script:ReviewExpanders.Clear()
+    $ui.ReviewTitle.Text = "Ready to set up this PC with: $Name"
+    $ui.ReviewRestoreBox.IsChecked = ($Config.restorePoint -ne $false)
+
+    $apps = @($Config.apps.install | Where-Object { $_ })
+    $rows = @(foreach ($a in $apps) { New-ReviewRow 'apps' (Get-AppLabel $a) $a $null $(if ($a -is [string]) { "winget: $a" }) })
+    if ($Config.installerRoot) {
+        $rows += New-ReviewRow 'installerRoot' 'Installers from (*:\ = any drive):' $null $Config.installerRoot 'Where the machine software installers are, e.g. a USB stick'
+    }
+    if ($Config.apps.upgradeAll) { $rows += New-ReviewRow 'upgradeAll' 'Upgrade every app to its latest version afterwards' $true $null }
+    Add-ReviewSection 'Apps' "$($apps.Count) to install" $rows @('apps', 'installerRoot', 'upgradeAll')
+
+    $on = @($Config.features.enable | Where-Object { $_ })
+    $off = @($Config.features.disable | Where-Object { $_ })
+    $rows = @(foreach ($f in $on) { New-ReviewRow 'featuresOn' $(if ($FeatureCatalog.Contains($f)) { $FeatureCatalog[$f] } else { $f }) $f $null $f })
+    $rows += @(foreach ($f in $off) { New-ReviewRow 'featuresOff' "Turn off: $(if ($FeatureCatalog.Contains($f)) { $FeatureCatalog[$f] } else { $f })" $f $null $f })
+    Add-ReviewSection 'Windows features' "$($on.Count) on$(if ($off) { ", $($off.Count) off" })" $rows @('featuresOn', 'featuresOff')
+
+    $tw = @()
+    if ($Config.tweaks) { $tw = @($Config.tweaks.PSObject.Properties) }
+    if ($Config.tweaks -is [System.Collections.IDictionary]) { $tw = @($Config.tweaks.GetEnumerator() | ForEach-Object { [pscustomobject]@{ Name = $_.Key; Value = $_.Value } }) }
+    $rows = @(foreach ($p in $tw) {
+            $t = $TweakCatalog[$p.Name]
+            $label = if ($t) { $t.Label } else { $p.Name }
+            if ($p.Value) { New-ReviewRow 'tweaks' $label $p.Name $null $(if ($t) { $t.Description }) }
+            else { New-ReviewRow 'tweaksUndo' "Undo: $label" $p.Name $null $(if ($t) { $t.Description }) }
+        })
+    Add-ReviewSection 'Windows settings' "$($tw.Count) settings" $rows @('tweaks', 'tweaksUndo')
+
+    $rm = @($Config.removeApps | Where-Object { $_ })
+    $rows = @(foreach ($r in $rm) { New-ReviewRow 'removeApps' $(if ($BuiltInAppCatalog.Contains($r)) { $BuiltInAppCatalog[$r] } else { $r }) $r $null $r })
+    Add-ReviewSection 'Remove built-in apps' "$($rm.Count) apps" $rows @('removeApps')
+
+    $tpl = @($Config.folderTemplates | Where-Object { $_ })
+    $fold = @($Config.folders | Where-Object { $_ })
+    $rows = @(foreach ($t in $tpl) {
+            $label = if ($t -is [string]) { "Template: $($FolderTemplates[$t].Label)" } else { "Template: $($t.label)" }
+            $tip = if ($t -is [string]) { $FolderTemplates[$t].Folders -join "`n" } else { @($t.folders) -join "`n" }
+            New-ReviewRow 'folderTemplates' $label $t $null $tip
+        })
+    $rows += @(foreach ($f in $fold) { New-ReviewRow 'folders' '' $null $f })
+    $copy = @($Config.copyFolders | Where-Object { $_ })
+    $rows += @(foreach ($c in $copy) { New-ReviewRow 'copyFolders' "Copy everything in $($c.source) to" $c $c.destination })
+    Add-ReviewSection 'Folders' "$($fold.Count) folders$(if ($tpl) { ", $($tpl.Count) templates" })$(if ($copy) { ", $($copy.Count) copied" })" $rows @('folderTemplates', 'folders', 'copyFolders') 'folders' 'Add a folder'
+
+    $qa = @($Config.quickAccess | Where-Object { $_ })
+    $rows = @(foreach ($q in $qa) { New-ReviewRow 'quickAccess' '' $null $q })
+    Add-ReviewSection 'Pinned to Quick Access' "$($qa.Count) folders" $rows @('quickAccess') 'quickAccess' 'Pin another folder'
+
+    $sc = @($Config.shortcuts | Where-Object { $_ })
+    $rows = @(foreach ($x in $sc) { New-ReviewRow 'shortcuts' "$($x.name)  ->" $x $x.target 'Shortcut on the desktop; edit where it points' })
+    $rows += @(foreach ($x in @($Config.removeShortcuts | Where-Object { $_ })) { New-ReviewRow 'removeShortcuts' "Delete $x" $x $null })
+    if ($Config.wallpaper) { $rows += New-ReviewRow 'wallpaper' 'Wallpaper:' $null $Config.wallpaper }
+    if ($Config.startLayout) { $rows += New-ReviewRow 'startLayout' 'Start menu pins from:' $null $Config.startLayout }
+    Add-ReviewSection 'Desktop and Start' "$($sc.Count) shortcuts$(if ($Config.wallpaper) { ', wallpaper' })$(if ($Config.startLayout) { ', Start pins' })" $rows @('shortcuts', 'removeShortcuts', 'wallpaper', 'startLayout')
+
+    $files = @($Config.files | Where-Object { $_ })
+    $reg = @($Config.registry | Where-Object { $_ })
+    $rows = @(foreach ($f in $files) { New-ReviewRow 'files' "File: $($f.destination)" $f $null $(if ($f.source) { "From $($f.source)" }) })
+    $rows += @(foreach ($r in $reg) { New-ReviewRow 'registry' "Registry: $($r.path)\$($r.name) = $($r.value)" $r $null })
+    Add-ReviewSection 'Files and registry' "$($files.Count) files, $($reg.Count) values" $rows @('files', 'registry')
+
+    if (-not $script:ReviewItems.Count) {
+        $empty = New-Object System.Windows.Controls.TextBlock
+        $empty.Text = 'Nothing selected yet. Pick things on the other tabs and click "Use what I picked on the other tabs", or load a preset.'
+        $empty.Foreground = '#8A8FA6'
+        [void]$ui.ReviewPanel.Children.Add($empty)
+    }
+}
+
+# Turns the ticked review rows back into a preset.
+function Get-ReviewPreset {
+    $c = [ordered]@{
+        restorePoint = [bool]$ui.ReviewRestoreBox.IsChecked
+        apps = [ordered]@{ install = @(); upgradeAll = $false }
+        removeApps = @(); folderTemplates = @(); folders = @(); copyFolders = @(); quickAccess = @()
+        files = @(); shortcuts = @(); removeShortcuts = @(); tweaks = [ordered]@{}; registry = @()
+        features = [ordered]@{ enable = @(); disable = @() }
+    }
+    foreach ($i in $script:ReviewItems) {
+        if (-not $i.Box.IsChecked) { continue }
+        $text = if ($i.Text) { $i.Text.Text.Trim() } else { $null }
+        if ($i.Text -and -not $text) { continue }
+        switch ($i.Key) {
+            'apps' { $c.apps.install += , $i.Value }
+            'installerRoot' { $c.installerRoot = $text }
+            'upgradeAll' { $c.apps.upgradeAll = $true }
+            'featuresOn' { $c.features.enable += $i.Value }
+            'featuresOff' { $c.features.disable += $i.Value }
+            'tweaks' { $c.tweaks[$i.Value] = $true }
+            'tweaksUndo' { $c.tweaks[$i.Value] = $false }
+            'removeApps' { $c.removeApps += $i.Value }
+            'folderTemplates' { $c.folderTemplates += , $i.Value }
+            'folders' { $c.folders += $text }
+            'copyFolders' { $o = $i.Value | ConvertTo-Json -Depth 5 | ConvertFrom-Json; $o.destination = $text; $c.copyFolders += $o }
+            'quickAccess' { $c.quickAccess += $text }
+            'shortcuts' { $o = $i.Value | ConvertTo-Json -Depth 5 | ConvertFrom-Json; $o.target = $text; $c.shortcuts += $o }
+            'removeShortcuts' { $c.removeShortcuts += $i.Value }
+            'wallpaper' { $c.wallpaper = $text }
+            'startLayout' { $c.startLayout = $text }
+            'files' { $c.files += , $i.Value }
+            'registry' { $c.registry += , $i.Value }
+        }
+    }
+    $c
+}
+
+function Start-Review([bool]$Preview) {
+    $cfg = Get-ReviewPreset
+    $json = @{ Config = $cfg; BaseDir = $script:LoadedBaseDir } | ConvertTo-Json -Depth 8
+    $was = $ui.DryRunBox.IsChecked
+    if ($Preview) { $ui.DryRunBox.IsChecked = $true }
+    Start-EngineJob '$j = $Job | ConvertFrom-Json; Invoke-Preset $j.Config $j.BaseDir' $json
+    $ui.DryRunBox.IsChecked = $was
+}
+
+function Import-PresetDialog {
+    $dlg = New-Object Microsoft.Win32.OpenFileDialog
+    $dlg.Filter = 'Preset (*.json)|*.json'
+    if ($dlg.ShowDialog()) {
+        try {
+            Set-SelectionFromPreset (Get-Content -Path $dlg.FileName -Raw | ConvertFrom-Json) (Split-Path -Parent $dlg.FileName) (Split-Path -Leaf $dlg.FileName)
+            $ui.Tabs.SelectedIndex = 0
+            $sync.LogQueue.Enqueue("Loaded preset $($dlg.FileName). Check the Review tab, then go.")
+        }
+        catch { $sync.LogQueue.Enqueue("Could not read preset: $($_.Exception.Message)") }
+    }
 }
 
 # --- Wire up buttons ---
@@ -1284,7 +1889,9 @@ $ui.InstallBtn.Add_Click({
         $apps = Get-CheckedApps
         if (-not $apps) { $sync.LogQueue.Enqueue('Tick some apps first.'); return }
         # Round-trip through JSON so custom apps reach the runspace as plain data.
-        Start-EngineJob '$apps = $Job | ConvertFrom-Json; Install-Apps $apps' (ConvertTo-Json @($apps) -Depth 5)
+        $root = if ($script:LoadedPreset) { $script:LoadedPreset.installerRoot } else { $null }
+        $json = @{ Apps = @($apps); BaseDir = $script:LoadedBaseDir; Root = $root } | ConvertTo-Json -Depth 6
+        Start-EngineJob '$j = $Job | ConvertFrom-Json; Install-Apps @($j.Apps) $j.BaseDir $j.Root' $json
     })
 
 $ui.UpgradeBtn.Add_Click({ Start-EngineJob 'Update-AllApps' $null })
@@ -1347,8 +1954,8 @@ $ui.CreateFoldersBtn.Add_Click({
 
 # Run everything: round-trip through JSON so it behaves exactly like a saved preset.
 $ui.RunAllBtn.Add_Click({
-        $json = Get-SelectionPreset | ConvertTo-Json -Depth 6
-        Start-EngineJob '$cfg = $Job | ConvertFrom-Json; Invoke-Preset $cfg $null' $json
+        $json = @{ Config = (Get-SelectionPreset); BaseDir = $script:LoadedBaseDir } | ConvertTo-Json -Depth 8
+        Start-EngineJob '$j = $Job | ConvertFrom-Json; Invoke-Preset $j.Config $j.BaseDir' $json
     })
 
 $ui.ExportBtn.Add_Click({
@@ -1356,26 +1963,30 @@ $ui.ExportBtn.Add_Click({
         $dlg.Filter = 'Preset (*.json)|*.json'
         $dlg.FileName = 'my-pc.json'
         if ($dlg.ShowDialog()) {
-            Get-SelectionPreset | ConvertTo-Json -Depth 6 | Set-Content -Path $dlg.FileName -Encoding UTF8
+            Get-SelectionPreset | ConvertTo-Json -Depth 8 | Set-Content -Path $dlg.FileName -Encoding UTF8
             $sync.LogQueue.Enqueue("Saved preset to $($dlg.FileName)")
         }
     })
 
-$ui.ImportBtn.Add_Click({
-        $dlg = New-Object Microsoft.Win32.OpenFileDialog
-        $dlg.Filter = 'Preset (*.json)|*.json'
-        if ($dlg.ShowDialog()) {
-            try {
-                Set-SelectionFromPreset (Get-Content -Path $dlg.FileName -Raw | ConvertFrom-Json)
-                $sync.LogQueue.Enqueue("Loaded preset $($dlg.FileName). Review the tabs, then run.")
-            }
-            catch { $sync.LogQueue.Enqueue("Could not read preset: $($_.Exception.Message)") }
-        }
+$ui.ImportBtn.Add_Click({ Import-PresetDialog })
+$ui.ReviewLoadBtn.Add_Click({ Import-PresetDialog })
+$ui.GoBtn.Add_Click({ Start-Review $false })
+$ui.PreviewBtn.Add_Click({ Start-Review $true })
+$ui.ReviewFromTabsBtn.Add_Click({ Build-Review ([pscustomobject](Get-SelectionPreset)) 'your selections' })
+$ui.ReviewExpandBtn.Add_Click({
+        $open = $ui.ReviewExpandBtn.Content -eq 'Show all details'
+        foreach ($e in $script:ReviewExpanders) { $e.IsExpanded = $open }
+        $ui.ReviewExpandBtn.Content = if ($open) { 'Hide details' } else { 'Show all details' }
     })
+
+# Without a preset, start from the recommended settings and the suggested folders.
+Set-Checked $tweakBoxes @($TweakCatalog.Keys | Where-Object { $TweakCatalog[$_].Recommended })
+Build-Review ([pscustomobject](Get-SelectionPreset)) 'the recommended defaults'
 
 if ($Preset) {
     try {
-        Set-SelectionFromPreset (Read-Preset $Preset).Config
+        $loaded = Read-Preset $Preset
+        Set-SelectionFromPreset $loaded.Config $loaded.BaseDir ([IO.Path]::GetFileName($Preset))
         $sync.LogQueue.Enqueue("Loaded preset $Preset")
     }
     catch { $sync.LogQueue.Enqueue("Could not read preset: $($_.Exception.Message)") }

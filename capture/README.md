@@ -5,6 +5,17 @@ These two scripts record exactly what you change on a Windows PC, so every app, 
 - `capture-state.ps1` takes a snapshot of the PC. It only reads; nothing on the PC is changed.
 - `compare-state.ps1` compares two snapshots and writes a readable report of what changed, plus a `suggested-preset.json` in the tool's preset format.
 
+## Quick start from a USB stick
+
+Copy the `capture` folder to the USB stick, then on the Windows PC:
+
+1. Fresh PC, updates done: double-click `1-capture-before.cmd` and say Yes to the admin prompt.
+2. Set the PC up the way you want it, then reboot.
+3. Double-click `2-capture-after.cmd`.
+4. Double-click `3-compare.cmd`.
+
+Everything is saved in the same folder on the USB stick. Bring back the `report-...zip` (and the `snapshot-...zip` files if there's room). The steps below explain each part in more detail.
+
 ## Why not just back up the registry?
 
 A full registry backup holds hundreds of thousands of values. Almost all of them are Windows defaults, hardware IDs, licence data, caches and timestamps that are different on every PC, and importing them on another machine can break it. There is no way to tell which values are the ones you chose.
