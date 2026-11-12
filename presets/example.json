@@ -1,0 +1,107 @@
+{
+  "restorePoint": true,
+  "apps": {
+    "install": [
+      "Google.Chrome",
+      "7zip.7zip",
+      "VideoLAN.VLC",
+      "Microsoft.VisualStudioCode",
+      "Microsoft.PowerToys",
+      "Notepad++.Notepad++",
+      "direct:rufus",
+      {
+        "name": "Example vendor app (fixed link)",
+        "url": "https://example.com/downloads/latest/setup.exe",
+        "args": "/S",
+        "detect": "Example App*"
+      },
+      {
+        "name": "Example MSI",
+        "url": "https://example.com/downloads/app-x64.msi",
+        "detect": "Example MSI*"
+      },
+      {
+        "name": "Example installer from the public files release",
+        "url": "files:ExampleSetup.exe",
+        "args": "/S",
+        "detect": "Example Setup*"
+      },
+      {
+        "name": "Example installer from the private files release (needs the setup key)",
+        "url": "private:ExamplePrivateSetup.msi",
+        "detect": "Example Private*"
+      },
+      {
+        "name": "Example from GitHub",
+        "github": "owner/repo",
+        "asset": "-x64-setup\\.exe$",
+        "args": "/VERYSILENT /NORESTART",
+        "detect": "Example*"
+      },
+      {
+        "name": "Example from a download page",
+        "page": "https://example.com/download",
+        "link": "href=\"([^\"]+\\.exe)\"",
+        "args": "/quiet",
+        "detect": "Example*"
+      }
+    ],
+    "upgradeAll": true
+  },
+  "removeApps": [
+    "Microsoft.BingNews",
+    "Microsoft.BingWeather",
+    "Microsoft.MicrosoftSolitaireCollection",
+    "Clipchamp.Clipchamp"
+  ],
+  "folderTemplates": [
+    "developer",
+    "support"
+  ],
+  "folders": [
+    "C:\\Tools",
+    "%USERPROFILE%\\Projects"
+  ],
+  "quickAccess": [
+    "C:\\Tools"
+  ],
+  "files": [
+    {
+      "source": "files:example-settings.json",
+      "destination": "%APPDATA%\\ExampleApp\\settings.json"
+    },
+    {
+      "source": "https://example.com/my-settings.json",
+      "destination": "%APPDATA%\\SomeApp\\settings.json"
+    }
+  ],
+  "tweaks": {
+    "ShowFileExtensions": true,
+    "ExplorerOpensThisPC": true,
+    "HideWidgets": true,
+    "DisableBingInStartSearch": true,
+    "DisableStartMenuSuggestions": true,
+    "DisableTelemetry": true,
+    "DisableAdvertisingId": true,
+    "EnableClipboardHistory": true,
+    "DarkMode": true
+  },
+  "registry": [
+    {
+      "path": "HKCU:\\Control Panel\\Desktop",
+      "name": "MenuShowDelay",
+      "type": "String",
+      "value": "100"
+    }
+  ],
+  "features": {
+    "enable": [
+      "Microsoft-Windows-Subsystem-Linux",
+      "VirtualMachinePlatform"
+    ],
+    "disable": [
+      "SMB1Protocol",
+      "MicrosoftWindowsPowerShellV2Root"
+    ]
+  }
+}
