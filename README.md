@@ -1,6 +1,6 @@
 # VectorContour Windows Setup
 
-A Windows setup tool in two parts, in one window:
+A Windows setup tool in two parts, in one window. New to it? Read the one-page [quick start](docs/quick-start.md) ([PDF](docs/quick-start.pdf)).
 
 - **Vector Contour** (first tab): set up a PC the company way. Pick a setup (the **Machine PC** preset from the reference PC is selected when the window opens), check the list, and click **Looks good, go**.
 - **Everything from Chris Titus Tech's WinUtil**, in the same tabs WinUtil has:
