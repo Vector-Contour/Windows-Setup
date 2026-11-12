@@ -1,23 +1,35 @@
 # VectorContour Windows Setup
 
-A WinUtil-style tool for setting up a fresh Windows 10/11 install from one window:
+A Windows setup tool in two parts, in one window:
 
-- **Install**: tick apps and install the latest version of each with winget. "Upgrade all apps" updates everything already installed. Apps that aren't on winget can be downloaded straight from the vendor's site (see below).
-- **Tweaks**: Windows settings (file extensions, Widgets, Bing in Start, ads, telemetry, dark mode, classic right-click menu...). Every tweak has **Undo**. A restore point is created first. You can also remove built-in apps like News, Weather and Solitaire.
-- **Features**: turn optional features on or off (WSL, Hyper-V, Windows Sandbox, .NET 3.5...).
-- **Folders**: ready-made folder templates (Developer, Business, Creative, IT support, Gaming, Tidy home folders), each with its folders, Quick Access pins and starter files, plus your own list of folders.
-- **Presets**: save your selections as JSON, load them on the next PC, or run them with no window.
+- **Vector Contour** (first tab): set up a PC the company way. Pick a setup (the **Machine PC** preset from the reference PC is selected when the window opens), check the list, and click **Looks good, go**.
+- **Everything from Chris Titus Tech's WinUtil**, in the same tabs WinUtil has:
+  - **Install**: about 240 apps by category, with search, WinGet or Chocolatey, *Install / upgrade selected*, *Uninstall selected*, *Upgrade all apps*, *Show installed apps* (ticks what's on the PC), and a filter for free and open source apps. You can add your own app by download link, GitHub repo or winget ID.
+  - **Tweaks**: WinUtil's essential and advanced tweaks with its **Standard**, **Minimal** and **Advanced** picks and **Undo**; its preference switches (dark mode, file extensions, taskbar alignment, Bing search, sticky keys...) which apply as soon as you flip them; DNS (Cloudflare, Google, Quad9, AdGuard, the fastest one, or back to automatic); the Ultimate Performance power plan; Multiplane Overlay; removing built-in apps; O&O ShutUp10++. Our own Vector Contour tweaks (power, scaling, wallpaper...) are there too, each with Undo.
+  - **Config**: WinUtil's features (.NET 3.5, Hyper-V, WSL, Sandbox, NFS, registry backup, F8 recovery...), Windows optional features, fixes (reset Windows Update, reset network, system corruption scan, reinstall WinGet, NTP server, AutoLogon), the old Control Panel pages, OpenSSH server and the CTT PowerShell profile.
+  - **Updates**: Windows default, **security updates only** (recommended for machine PCs: security fixes 4 days late, feature updates a year late, no driver updates), or updates off. Plus *Check for updates now* and *Reset Windows Update*.
+- **Folders**: folder templates and your own folder list. **Presets**: save what you picked as a preset, or load one (WinUtil's own exported config files load too).
+
+The app list, tweaks and features are read from WinUtil's own config files each time the window opens, so they stay as current as WinUtil. If GitHub can't be reached, the copy in `winutil/config` is used (`-Catalog pinned` always uses that copy). WinUtil is MIT licensed, Copyright (c) 2022 CT Tech Group LLC; its licence is in `winutil/LICENSE`. Not included: WinUtil's MicroWin (custom Windows ISO builder).
 
 Anything already in place is skipped, so it is safe to run again. **Dry run** shows what would change without changing anything. Each run is logged in the window (and to `%TEMP%\winsetup-*.log` in unattended mode).
 
-## Review & go
+## Vector Contour tab (review & go)
 
-The window opens on **Review & go**: one page listing everything that will happen, all ticked. It starts with the recommended settings and suggested folders. Load a preset (or drop one on the exe) and it shows that preset instead.
+The window opens on **Vector Contour** with the Machine PC setup loaded: one page listing everything that will happen, all ticked. Pick another setup from the list (setups live in `presets/` and are listed in `$CompanyPresets` at the top of `winsetup.ps1`), or load a preset file.
 
 - If it all looks right, click **Looks good, go**. **Preview first** shows what would change, without changing anything.
 - Untick a row to skip it, or untick a section's header to skip the whole section.
 - Open a section to edit folder paths, shortcut targets, the installer location or the wallpaper, or to add folders and Quick Access pins.
-- **Use what I picked on the other tabs** rebuilds the page from the Install, Tweaks, Features and Folders tabs, for when you'd rather build a setup from scratch.
+- **Use what I picked on the other tabs** rebuilds the page from the other tabs, for when you'd rather build a setup from scratch.
+
+### Testing a branch before it is merged
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/Vector-Contour/Windows-Setup/BRANCH/winsetup.ps1))) -Branch BRANCH
+```
+
+`-Branch` makes the presets and the pinned catalog load from that branch too.
 
 ## Running it
 
@@ -70,7 +82,7 @@ On AWS that is an S3 bucket redirect rule or a CloudFront function; most hosting
 
 GitHub Actions checks every change: it parses every script in Windows PowerShell 5.1, checks the presets are valid JSON, and builds `VectorContourSetup.exe`. The exe from any run can be downloaded from that run's page under **Artifacts**.
 
-To publish a version, create a tag such as `v0.2.0` (GitHub: **Releases > Draft a new release**, type the new tag, publish). The build attaches `winsetup.ps1` and `VectorContourSetup.exe` to that release. Built files are never committed to the repo.
+To publish a version, create a tag such as `v1.0.0` (GitHub: **Releases > Draft a new release**, type the new tag, publish). The build attaches `winsetup.ps1` and `VectorContourSetup.exe` to that release. Built files are never committed to the repo.
 
 ## Your own installers and files
 
@@ -177,6 +189,25 @@ Power settings are tweaks, so they appear on the Tweaks tab with Undo: `NeverSle
 
 When you load a preset in the window, the sections the window has no controls for (wallpaper, shortcuts, copied folders, files, registry) are kept, and run with **Run everything**.
 
+### WinUtil settings in a preset
+
+```json
+{
+  "packageManager": "winget",
+  "winutil": {
+    "tweaks": ["WPFTweaksRestorePoint", "WPFTweaksTelemetry", "WPFTweaksServices"],
+    "toggles": { "WPFToggleDarkMode": true, "WPFToggleBingSearch": false },
+    "features": ["WPFFeaturesdotnet"],
+    "actions": ["WPFFixesNTPPool", "WPFAddUltPerf"],
+    "choices": { "WPFMultiplaneOverlay": "Disabled (Compatibility)" }
+  },
+  "dns": "Cloudflare",
+  "updates": "security"
+}
+```
+
+The keys are WinUtil's own names (see `winutil/config/tweaks.json` and `feature.json`). `packageManager` is `winget` or `choco`; apps can also be listed as `choco:<package>`. `updates` is `default`, `security` or `disable`. `dns` is `DHCP`, `Fastest` or a name from `dns.json`.
+
 ## Status
 
-Version 0.2.0. Version 0.2.0 adds power, wallpaper, shortcut, local-installer and folder-copy options, and these haven't been run on Windows yet either. Test it in a VM or on a spare PC before you publish the link. The winget IDs were written from memory and should be checked with `winget search`.
+Version 1.0.0 adds the WinUtil tabs (Install, Tweaks, Config, Updates) and makes the Machine PC setup the default first tab. It has been checked in dry runs on Linux PowerShell with Windows commands stubbed out, but has not run on Windows yet. Test it on the spare x64 PC (reset it with "Reset this PC" between runs) before using it on customer PCs.

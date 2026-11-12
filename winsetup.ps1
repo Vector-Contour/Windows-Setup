@@ -30,12 +30,15 @@ param(
     # latest = WinUtil's catalog straight from Chris Titus Tech (falls back to the pinned copy)
     # pinned = the copy in this repo (winutil/config), for a setup that never changes under you
     [ValidateSet('latest', 'pinned')]
-    [string]$Catalog = 'latest'
+    [string]$Catalog = 'latest',
+    # Branch of the GitHub repo to load presets, the pinned catalog and (when relaunching
+    # as admin) this script from. Only for testing a change before it is merged.
+    [string]$Branch = 'main'
 )
 
 $AppName = 'VectorContour Windows Setup'
 $AppVersion = '1.0.0'
-$RepoRaw = 'https://raw.githubusercontent.com/Vector-Contour/Windows-Setup/main'
+$RepoRaw = "https://raw.githubusercontent.com/Vector-Contour/Windows-Setup/$Branch"
 $SourceUrl = "$RepoRaw/winsetup.ps1"
 $WinUtilRaw = 'https://raw.githubusercontent.com/ChrisTitusTech/winutil/main/config'
 
@@ -68,6 +71,7 @@ if (-not $isAdmin -or $isCore -or (-not $Run -and -not $isSta)) {
     if ($Run) { $passArgs += '-Run' }
     if ($DryRun) { $passArgs += '-DryRun' }
     if ($Catalog -ne 'latest') { $passArgs += "-Catalog $Catalog" }
+    if ($Branch -ne 'main') { $passArgs += "-Branch '$Branch'" }
     $passArgs = $passArgs -join ' '
 
     if ($PSCommandPath) {
@@ -1735,8 +1739,11 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wPa
     # Applies a whole preset. Callers wrap it with Reset-Stats / Write-Summary.
     function Invoke-Preset($Config, [string]$BaseDir) {
         $tweaks = ConvertTo-TweakTable $Config.tweaks
-        $wuTweaks = @($Config.winutil.tweaks | Where-Object { $_ })
-        if ($Config.restorePoint -ne $false -and ($tweaks.Count -or $Config.registry -or $Config.removeApps -or $wuTweaks -or $Config.updates) -and $wuTweaks -notcontains 'WPFTweaksRestorePoint') { New-RestorePoint }
+        # WinUtil's "Restore Point - Create" tweak just means: make one first.
+        $wuTweaks = @($Config.winutil.tweaks | Where-Object { $_ -and $_ -ne 'WPFTweaksRestorePoint' })
+        $wantRestore = @($Config.winutil.tweaks) -contains 'WPFTweaksRestorePoint' -or
+            ($Config.restorePoint -ne $false -and ($tweaks.Count -or $Config.registry -or $Config.removeApps -or $wuTweaks -or $Config.updates -or $Config.winutil.toggles))
+        if ($wantRestore) { New-RestorePoint }
         # Features first: some apps (e.g. ones needing .NET 3.5 or IIS) won't install without them.
         Set-Features @($Config.features.enable) @($Config.features.disable)
         Invoke-WinUtilFeatures @($Config.winutil.features)
@@ -1754,7 +1761,7 @@ public static extern IntPtr SendMessageTimeout(IntPtr hWnd, uint Msg, IntPtr wPa
         if ($Config.wallpaper) { Write-Section 'Wallpaper'; Set-Wallpaper $Config.wallpaper $BaseDir }
         Set-StartLayout $Config.startLayout $BaseDir
         Set-Tweaks $tweaks
-        Invoke-WinUtilTweaks @($Config.winutil.tweaks)
+        Invoke-WinUtilTweaks $wuTweaks
         Set-WinUtilToggles $Config.winutil.toggles
         if ($Config.winutil.choices) { foreach ($c in $Config.winutil.choices.PSObject.Properties) { Set-WinUtilChoice $c.Name $c.Value } }
         Set-DnsProvider $Config.dns

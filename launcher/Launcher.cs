@@ -13,8 +13,8 @@ using System.Windows.Forms;
 [assembly: AssemblyTitle("VectorContour Windows Setup")]
 [assembly: AssemblyProduct("VectorContour Windows Setup")]
 [assembly: AssemblyCompany("VectorContour")]
-[assembly: AssemblyVersion("0.1.0.0")]
-[assembly: AssemblyFileVersion("0.1.0.0")]
+[assembly: AssemblyVersion("1.0.0.0")]
+[assembly: AssemblyFileVersion("1.0.0.0")]
 
 static class Launcher
 {

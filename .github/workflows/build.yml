@@ -38,7 +38,7 @@ jobs:
 
       - name: Check preset JSON
         shell: powershell
-        run: Get-ChildItem presets -Filter *.json | ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json | Out-Null; "ok  $($_.Name)" }
+        run: Get-ChildItem presets, winutil/config -Filter *.json | ForEach-Object { Get-Content $_.FullName -Raw | ConvertFrom-Json | Out-Null; "ok  $($_.Name)" }
 
       - name: Build VectorContourSetup.exe
         shell: powershell
